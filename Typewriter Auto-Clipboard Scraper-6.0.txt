@@ -1,0 +1,66 @@
+// ==UserScript==
+// @name         Typewriter Auto-Clipboard Scraper
+// @namespace    typewriter.at.devtool
+// @version      6.0
+// @description  Liest dynamisch nachgeladenen Text aus und schreibt ihn sofort in die Zwischenablage
+// @match        https://at4.typewriter.at/index.php?r=typewriter/runLevel*
+// @grant        GM_setClipboard
+// @run-at       document-idle
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  let lastCopiedText = '';
+
+  function getRemainingText() {
+    const hudtxt = document.getElementById('hudtxt');
+    if (!hudtxt) return '';
+
+    const todoDivs = Array.from(hudtxt.querySelectorAll('div[id^="text_todo_"]'));
+    let fullText = '';
+
+    for (const div of todoDivs) {
+      if (window.getComputedStyle(div).display !== 'none') {
+        const spans = div.querySelectorAll('span');
+        for (const span of spans) {
+          let char = span.textContent;
+          if (char === '\u00A0' || char === '') char = ' ';
+          fullText += char;
+        }
+      }
+    }
+    return fullText;
+  }
+
+  function syncToClipboard() {
+    const currentText = getRemainingText();
+    // Nur in Zwischenablage schreiben, wenn neuer/veränderter Text vorliegt
+    if (currentText && currentText !== lastCopiedText) {
+      lastCopiedText = currentText;
+      GM_setClipboard(currentText);
+      console.log('[Scraper] Neuer Textabschnitt in Zwischenablage aktualisiert.');
+    }
+  }
+
+  // Überwacht den Text-Container auf DOM-Änderungen (sobald die Seite neue Zeilen nachlädt)
+  const targetNode = document.getElementById('hudtxt');
+  if (targetNode) {
+    const observer = new MutationObserver(() => {
+      syncToClipboard();
+    });
+    observer.observe(targetNode, { childList: true, subtree: true, characterData: true });
+  }
+
+  // Initialer Scan nach dem Laden der Seite
+  setTimeout(syncToClipboard, 500);
+
+  // Manueller Notfall-Sync per Alt + C
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key.toLowerCase() === 'c') {
+      syncToClipboard();
+    }
+  });
+
+  console.log('[Scraper] Geladen. Der sichtbare Text wird automatisch in die Zwischenablage synchronisiert.');
+})();
